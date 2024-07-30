@@ -144,8 +144,9 @@ def create_graph_tensor(input_values, input_raw_values, input_json, dev):
 
     # ------------------ testing ---------------
 
-    input_values_2 = np.asarray(input_values[3:]).astype('float32')
-    
+    input_values_2 = np.asarray(input_values[3:-1]).astype('float32') # for only resource
+    # input_values_2 = np.asarray(input_values[3:]).astype('float32') # for resource and latency
+
     input_json = input_values[:3]
     if input_raw_values[1] == -1:
         input_json[1] = None

@@ -64,6 +64,10 @@ def display_results_regressor(X_test, X_raw_test, y_test, output_features, folde
     i = 0
     for feature in output_features:
 
+        # if feature != "LUT_hls":
+        #     i += 1
+        #     continue
+        
         model = load_model(folder_name+'/regression_'+feature).to("cpu")
         model.switch_device("cpu")
         model.eval()
@@ -75,19 +79,14 @@ def display_results_regressor(X_test, X_raw_test, y_test, output_features, folde
                 X = next(iter(X_loader))
                 y_pred_part = model(X).detach().numpy()
                 from model.wa_hls4ml_train import bounded_percentile_loss
-                print(torch.mean(torch.nn.functional.l1_loss(torch.tensor(y_pred_part[:,0]), torch.tensor(y_test[:, i]))))
-                # print(torch.nn.functional.huber_loss(torch.tensor(y_pred_part[:,0]), torch.tensor(y_test[:, i])))
-                # print("saving...")
-                # np.save("dump_lut_pred.npy",y_pred_part[:,0])
-                # np.save("dump_lut_gt.npy", y_test[:,i])
-                # sys.exit(0)
-                # # np.save("dump_dsp.npy", y_pred_part)
                 
-                # print(X_test)
             else:
                 y_pred_part = model(torch.tensor(X_test)).detach().numpy()
 
             print("Part " + feature + ": " + str(y_pred_part.shape))
+            print(torch.mean(torch.nn.functional.l1_loss(torch.tensor(y_pred_part[:,0]), torch.tensor(y_test[:, i]))))
+
+
 
         # Consolidate feature predictions
         y_pred[:, i] = y_pred_part[:, 0]
