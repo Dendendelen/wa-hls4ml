@@ -4,7 +4,7 @@ wa-hls4ml: A Graph Neural Network surrogate model for hls4ml
 
 File structure:
 
-wa_hls4ml/py: Command line interface
+wa_hls4ml.py: Command line interface
 
 data/
 > wa_hls4ml_data_processing.py: Input data formatting and graph-conversion
