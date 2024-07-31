@@ -102,8 +102,8 @@ def plot_histograms(y_predicted, y_actual, output_features, folder_name):
         plot_histogram(feature_diff, 'Residual of '+feature, 'Error of '+feature +" (RMSE = " + str(rms) +")", feature, folder_name, False, colors[i])
         plot_histogram(feature_diff, 'Log Residual of '+feature, 'Error of '+feature +" (RMSE = " + str(rms) +")", feature, folder_name, True, colors[i])
 
+        # save residuals for later plotting
         np.save(folder_name+"/plots/"+feature+".npy", feature_diff)
-
         print("Finished plots for "+feature)
 
         i += 1

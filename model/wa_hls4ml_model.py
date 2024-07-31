@@ -132,27 +132,11 @@ class GraphNet(nn.Module):
         # preprocessing_edge['preproc_edges_batchnorm'] = nn.BatchNorm1d(2)
         self.preprocessing_edge_nn = nn.Sequential(preprocessing_edge)
 
-        # preprocessing for the global features
-        # preprocessing_global = collections.OrderedDict()
-        # preprocessing_global['preproc_glob_fc1'] = nn.Linear(in_features=num_global_features, out_features=256)
-        # preprocessing_global['preproc_glob_relu1'] = nn.ELU()
-        # preprocessing_global['preproc_glob_dropout'] = nn.Dropout(0.05)
-        # preprocessing_global['preproc_glob_fc2'] = nn.Linear(in_features=256, out_features=2048)
-        # preprocessing_global['preproc_glob_relu2'] = nn.ELU()
-        # preprocessing_global['preproc_glob_dropout2'] = nn.Dropout(0.1)
-        # preprocessing_global['preproc_glob_fc3'] = nn.Linear(in_features=2048, out_features=2048)
-        # preprocessing_global['preproc_glob_relu3'] = nn.ELU()
-        # preprocessing_global['preproc_glob_dropout3'] = nn.Dropout(0.3)
-        # preprocessing_global['preproc_glob_fc4'] = nn.Linear(in_features=2048, out_features=256)
-        # preprocessing_global['preproc_glob_relu4'] = nn.ELU()
-        # preprocessing_global['preproc_glob_dropout4'] = nn.Dropout(0.1)
-        # self.preprocessing_glob_nn = nn.Sequential(preprocessing_global)
-
         # GAT layer 1
         self.gat_layer = gnn.GATv2Conv(in_channels=256, out_channels=512, heads=8, add_self_loops=False, concat=False, share_weights=False, dropout=0.3)
 
         # Message passing layer 1
-        self.multiply = gnn.MulAggregation()
+        self.multiply = gnn.MultiAggregation(aggrs=[gnn.SumAggregation(), gnn.MulAggregation()], mode='proj', mode_kwargs={"in_channels":512, "out_channels":512})
         self.middle_message_layer = gnn.SimpleConv(aggr=self.multiply)
         self.middle_message_activation = nn.LeakyReLU()
 
@@ -177,9 +161,8 @@ class GraphNet(nn.Module):
         self.edge_attention_embedding_layer = nn.Sequential(edge_attention_embedding)
 
         # Global pooling for node features
-        self.pooling_nodes = gnn.MulAggregation()
-        # self.pooling_nodes = gnn.MultiAggregation(aggrs=[gnn.SumAggregation(), gnn.MulAggregation()])
-        self.pooling_nodes_norm = nn.BatchNorm1d(1024)
+        # self.pooling_nodes = gnn.MulAggregation()
+        self.pooling_nodes = gnn.MultiAggregation(aggrs=[gnn.SumAggregation(), gnn.MulAggregation()], mode='proj', mode_kwargs={"in_channels":512, "out_channels":512})
 
         # Global pooling for edge features and attention
         self.pooling_edges = gnn.pool.global_add_pool
@@ -190,9 +173,6 @@ class GraphNet(nn.Module):
         final_pool['pool_fc1'] = nn.Linear(in_features=(512+1), out_features=256)
         final_pool['pool_relu1'] = nn.ELU()
         final_pool['pool_dropout'] = nn.Dropout(0.2)
-        # final_pool['pool_fc2'] = nn.Linear(in_features=1024, out_features=256)
-        # final_pool['pool_relu2'] = nn.ELU()
-        # final_pool['pool_dropout2'] = nn.Dropout(0.2)
         final_pool['pool_output'] = nn.Linear(in_features=256, out_features=1)
 
         # if doing binary classification, we need a final sigmoid layer to turn logits into 0-1 range
@@ -281,8 +261,7 @@ class GraphNet(nn.Module):
         
         # pool the nodes
         out_nodes = self.pooling_nodes(x, index=batch_vector.to(self.dev))
-        # out_nodes = self.pooling_nodes_norm(out_nodes)
-
+        
         # We would really like to pool edge features as well. Unfortunately, there isn't a built in way for it
         # Thus, we need to fabricate an edge batch vector
         edge_batch_vector = torch.empty((edge_attr.shape[0]), dtype=torch.int64)
@@ -308,7 +287,6 @@ class GraphNet(nn.Module):
         out_edges = self.pooling_edges_norm(out_edges)
 
         # concatenate the pooled nodes, pooled edges, and global features into one large feature vector. Then, send that through a final NN for total output
-        # pooled = torch.cat((out_nodes, out_edges, y), dim=1)
         pooled = torch.cat((out_nodes, out_edges), dim=1)
         out = self.final_pooling_layer(pooled)
 
@@ -333,9 +311,9 @@ class GraphNet(nn.Module):
         self.dev = dev
 
 def create_model_gnn_class(dev = "cpu"):
-    model = GraphNet(num_global_features=3, classification=True, dev = dev).to(dev)
+    model = GraphNet(num_global_features=5, classification=True, dev = dev).to(dev)
     return model
 
 def create_model_gnn_reg(dev = "cpu"):
-    model = GraphNet(num_global_features=3, classification=False, dev = dev).to(dev)
+    model = GraphNet(num_global_features=5, classification=False, dev = dev).to(dev)
     return model

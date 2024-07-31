@@ -63,10 +63,6 @@ def display_results_regressor(X_test, X_raw_test, y_test, output_features, folde
 
     i = 0
     for feature in output_features:
-
-        # if feature != "LUT_hls":
-        #     i += 1
-        #     continue
         
         model = load_model(folder_name+'/regression_'+feature).to("cpu")
         model.switch_device("cpu")
@@ -77,9 +73,7 @@ def display_results_regressor(X_test, X_raw_test, y_test, output_features, folde
             if is_graph:
                 X_loader = gloader.DataLoader(X_test, batch_size=len(X_test))
                 X = next(iter(X_loader))
-                y_pred_part = model(X).detach().numpy()
-                from model.wa_hls4ml_train import bounded_percentile_loss
-                
+                y_pred_part = model(X).detach().numpy()                
             else:
                 y_pred_part = model(torch.tensor(X_test)).detach().numpy()
 
