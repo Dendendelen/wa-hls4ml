@@ -220,9 +220,9 @@ def train_regressor(X_train, y_train, output_features, folder_name, is_graph, de
     if is_graph:
         epochs = 350
         batch = 512
-        learning_rate = 0.002 
+        learning_rate = 0.001 
         patience = 10
-        cooldown = 5
+        cooldown = 6
         factor = 0.5
         min_lr = 1e-10
         epsilon = 1e-10
@@ -237,6 +237,9 @@ def train_regressor(X_train, y_train, output_features, folder_name, is_graph, de
 
         i += 1
 
+        # if feature != "LUT_hls":
+        #     continue
+
         name = 'regression_'+feature
 
         if not is_graph:
@@ -247,6 +250,7 @@ def train_regressor(X_train, y_train, output_features, folder_name, is_graph, de
         if feature == "DSP_hls":
             loss_function = LogCoshLoss()
         else:
-            loss_function = torch.nn.MSELoss()
+            loss_function = LogCoshLoss()
+            # loss_function = torch.nn.MSELoss()
 
         general_train(X_train, y_train_feature, model, loss_function, is_graph, batch, test_size, epochs, name, folder_name, learning_rate, weight_decay, patience, cooldown, factor, min_lr, epsilon, dev)

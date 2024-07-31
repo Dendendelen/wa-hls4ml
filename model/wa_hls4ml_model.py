@@ -59,10 +59,10 @@ class ClassificationNet(nn.Module):
         '''Forward pass'''
         return self.layers(x)
 
-    def switch_device(dev):
+    def switch_device(self, dev):
         return
 
-def create_model_classification(self, dev):
+def create_model_classification(dev):
 
     model = ClassificationNet().to(dev)
     return model
@@ -118,10 +118,10 @@ class GraphNet(nn.Module):
 
         # preprocessing for the node features
         preprocessing_node = collections.OrderedDict()
-        preprocessing_node['preproc_nodes_fc1'] = nn.Linear(in_features=1, out_features=16)
+        preprocessing_node['preproc_nodes_fc1'] = nn.Linear(in_features=1+num_global_features, out_features=256)
         preprocessing_node['preproc_nodes_relu1'] = nn.ELU()
         preprocessing_node['preproc_nodes_dropout'] = nn.Dropout(0.2)
-        preprocessing_node['preproc_nodes_batchnorm'] = nn.BatchNorm1d(16)
+        # preprocessing_node['preproc_nodes_batchnorm'] = nn.BatchNorm1d(256)
         self.preprocessing_node_nn = nn.Sequential(preprocessing_node)
 
         # preprocessing for the edge features
@@ -129,55 +129,40 @@ class GraphNet(nn.Module):
         preprocessing_edge['preproc_edges_fc1'] = nn.Linear(in_features=1, out_features=2)
         preprocessing_edge['preproc_edges_relu1'] = nn.ELU()
         preprocessing_edge['preproc_edges_dropout'] = nn.Dropout(0.9)
-        preprocessing_edge['preproc_edges_batchnorm'] = nn.BatchNorm1d(2)
+        # preprocessing_edge['preproc_edges_batchnorm'] = nn.BatchNorm1d(2)
         self.preprocessing_edge_nn = nn.Sequential(preprocessing_edge)
 
-        # preprocessing for the global features
-        preprocessing_global = collections.OrderedDict()
-        preprocessing_global['preproc_glob_fc1'] = nn.Linear(in_features=num_global_features, out_features=256)
-        preprocessing_global['preproc_glob_relu1'] = nn.ELU()
-        preprocessing_global['preproc_glob_dropout'] = nn.Dropout(0.05)
-        preprocessing_global['preproc_glob_fc2'] = nn.Linear(in_features=256, out_features=2048)
-        preprocessing_global['preproc_glob_relu2'] = nn.ELU()
-        preprocessing_global['preproc_glob_dropout2'] = nn.Dropout(0.1)
-        preprocessing_global['preproc_glob_fc3'] = nn.Linear(in_features=2048, out_features=2048)
-        preprocessing_global['preproc_glob_relu3'] = nn.ELU()
-        preprocessing_global['preproc_glob_dropout3'] = nn.Dropout(0.3)
-        preprocessing_global['preproc_glob_fc4'] = nn.Linear(in_features=2048, out_features=256)
-        preprocessing_global['preproc_glob_relu4'] = nn.ELU()
-        preprocessing_global['preproc_glob_dropout4'] = nn.Dropout(0.1)
-        self.preprocessing_glob_nn = nn.Sequential(preprocessing_global)
-
         # GAT layer 1
-        self.gat_layer = gnn.GATv2Conv(in_channels=16, out_channels=128, heads=8, add_self_loops=False, concat=False, share_weights=False, dropout=0.3)
+        self.gat_layer = gnn.GATv2Conv(in_channels=256, out_channels=512, heads=8, add_self_loops=False, concat=False, share_weights=False, dropout=0.3)
 
         # Message passing layer 1
-        self.multiply = gnn.MulAggregation()
+        self.multiply = gnn.MultiAggregation(aggrs=[gnn.SumAggregation(), gnn.MulAggregation()], mode='proj', mode_kwargs={"in_channels":512, "out_channels":512})
         self.middle_message_layer = gnn.SimpleConv(aggr=self.multiply)
         self.middle_message_activation = nn.LeakyReLU()
 
         # GAT layer 2
-        self.gat_layer_2 = gnn.GATv2Conv(in_channels=128, out_channels=128, heads=8, add_self_loops=False, concat=False, dropout=0.3, edge_dim=8)
+        self.gat_layer_2 = gnn.GATv2Conv(in_channels=512, out_channels=512, heads=16, add_self_loops=False, concat=False, dropout=0.3, edge_dim=8)
 
         # Message passing layer 2
-        self.multiply_2 = gnn.MultiAggregation(aggrs=[gnn.SumAggregation(), gnn.MulAggregation()])
+        # self.multiply_2 = gnn.MulAggregation()
+        self.multiply_2 = gnn.MultiAggregation(aggrs=[gnn.SumAggregation(), gnn.MulAggregation()], mode='proj', mode_kwargs={"in_channels":512, "out_channels":512})
         self.middle_message_layer_2 = gnn.SimpleConv(aggr=self.multiply_2)
         self.middle_message_activation_2 = nn.LeakyReLU()
 
         # Graph-wise node feature normalization layer
-        self.message_norm = gnn.norm.GraphNorm(in_channels=256)
+        self.message_norm = gnn.norm.GraphNorm(in_channels=512)
 
         # NN for embedding the edge attention together with the edge features
         edge_attention_embedding = collections.OrderedDict()
-        edge_attention_embedding['edge_embed_fc1'] = nn.Linear(in_features = 10, out_features=128)
+        edge_attention_embedding['edge_embed_fc1'] = nn.Linear(in_features = 18, out_features=128)
         edge_attention_embedding['edge_embed_elu1'] = nn.ELU()
         edge_attention_embedding['edge_embed_dropout'] = nn.Dropout(0.4)
         edge_attention_embedding['edge_embed_output'] = nn.Linear(in_features=128, out_features=1)
         self.edge_attention_embedding_layer = nn.Sequential(edge_attention_embedding)
 
         # Global pooling for node features
-        self.pooling_nodes = gnn.MultiAggregation(aggrs=[gnn.SumAggregation(), gnn.MulAggregation()])
-        self.pooling_nodes_norm = nn.BatchNorm1d(512)
+        # self.pooling_nodes = gnn.MulAggregation()
+        self.pooling_nodes = gnn.MultiAggregation(aggrs=[gnn.SumAggregation(), gnn.MulAggregation()], mode='proj', mode_kwargs={"in_channels":512, "out_channels":512})
 
         # Global pooling for edge features and attention
         self.pooling_edges = gnn.pool.global_add_pool
@@ -185,12 +170,9 @@ class GraphNet(nn.Module):
 
         # Final pooling layer for all features
         final_pool = collections.OrderedDict()
-        final_pool['pool_fc1'] = nn.Linear(in_features=(256+512+1), out_features=2048)
+        final_pool['pool_fc1'] = nn.Linear(in_features=(512+1), out_features=256)
         final_pool['pool_relu1'] = nn.ELU()
         final_pool['pool_dropout'] = nn.Dropout(0.2)
-        final_pool['pool_fc2'] = nn.Linear(in_features=2048, out_features=256)
-        final_pool['pool_relu2'] = nn.ELU()
-        final_pool['pool_dropout2'] = nn.Dropout(0.2)
         final_pool['pool_output'] = nn.Linear(in_features=256, out_features=1)
 
         # if doing binary classification, we need a final sigmoid layer to turn logits into 0-1 range
@@ -207,14 +189,14 @@ class GraphNet(nn.Module):
         # initialize all simple NNs with Glorot uniform initialization
         self.preprocessing_node_nn.apply(init_weights)
         self.preprocessing_edge_nn.apply(init_weights)
-        self.preprocessing_glob_nn.apply(init_weights)
+        # self.preprocessing_glob_nn.apply(init_weights)
         self.edge_attention_embedding_layer.apply(init_weights)
         self.final_pooling_layer.apply(init_weights)
 
         self.gat_layer.reset_parameters()
         self.gat_layer_2.reset_parameters()        
 
-    def preprocessing_layer(self, x, edge_index, edge_attr, y):
+    def preprocessing_layer(self, x, edge_index, edge_attr, y, batch_vector):
         ''' Perform a pre-convolution processing pass on the data, adding self-loops and passing features through individual neural nets '''
 
         # add self-loops to every graph to allow self-propogation
@@ -225,13 +207,17 @@ class GraphNet(nn.Module):
         batch_size = int(num_total_glob_features / self.global_features)
         y = torch.reshape(y, (batch_size, self.global_features))
 
+        extra_features = y[batch_vector]
+
+        x = torch.cat((x, extra_features), dim=1)
+
         # the last of our global features is the number of edges in each graph. We should store that for later
         self.num_edges_per_graph = y[:, -1]
 
         # perform initial MLPs to get representations of our input features
         x = self.preprocessing_node_nn(x)
         edge_attr = self.preprocessing_edge_nn(edge_attr)
-        y = self.preprocessing_glob_nn(y)
+        # y = self.preprocessing_glob_nn(y)
 
         return x, edge_index, edge_attr, y
 
@@ -275,8 +261,7 @@ class GraphNet(nn.Module):
         
         # pool the nodes
         out_nodes = self.pooling_nodes(x, index=batch_vector.to(self.dev))
-        out_nodes = self.pooling_nodes_norm(out_nodes)
-
+        
         # We would really like to pool edge features as well. Unfortunately, there isn't a built in way for it
         # Thus, we need to fabricate an edge batch vector
         edge_batch_vector = torch.empty((edge_attr.shape[0]), dtype=torch.int64)
@@ -302,7 +287,7 @@ class GraphNet(nn.Module):
         out_edges = self.pooling_edges_norm(out_edges)
 
         # concatenate the pooled nodes, pooled edges, and global features into one large feature vector. Then, send that through a final NN for total output
-        pooled = torch.cat((out_nodes, out_edges, y), dim=1)
+        pooled = torch.cat((out_nodes, out_edges), dim=1)
         out = self.final_pooling_layer(pooled)
 
         return out
@@ -316,7 +301,7 @@ class GraphNet(nn.Module):
         y = graph.y
         batch_vector = graph.batch
 
-        x, edge_index, edge_attr, y = self.preprocessing_layer(x, edge_index, edge_attr, y)
+        x, edge_index, edge_attr, y = self.preprocessing_layer(x, edge_index, edge_attr, y, batch_vector)
         x, edge_attr = self.message_passing_layer(x, edge_index, edge_attr, batch_vector)
         out = self.pooling_layer(x, edge_index, edge_attr, y, batch_vector)
 
