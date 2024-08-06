@@ -17,6 +17,7 @@ import data.wa_hls4ml_data_plot as wa_hls4ml_data_plot
 from model.wa_hls4ml_model import save_model
 
 import sys
+from typing import Optional
 
 def bounded_percentile_loss(y_pred: torch.Tensor, y_truth: torch.Tensor) -> torch.Tensor:
     error = torch.abs(torch.sub(y_pred, y_truth))
@@ -42,13 +43,19 @@ def log_cosh_loss(y_pred: torch.Tensor, y_true: torch.Tensor) -> torch.Tensor:
         return x + torch.nn.functional.softplus(-2.0 * x) - math.log(2.0)
     return torch.mean(_log_cosh(y_pred - y_true))
 
+def weighted_log_cosh_loss(y_pred: torch.Tensor, y_true: torch.Tensor, weights: torch.Tensor) -> torch.Tensor:
+    def _log_cosh(x: torch.Tensor) -> torch.Tensor:
+        return x + torch.nn.functional.softplus(-2.0 * x) - math.log(2.0)
+    return torch.mean(_log_cosh(y_pred - y_true)*weights)
 
 class LogCoshLoss(torch.nn.Module):
     def __init__(self):
         super().__init__()
 
-    def forward(self, y_pred: torch.Tensor, y_true: torch.Tensor) -> torch.Tensor:
-        return log_cosh_loss(y_pred, y_true)
+    def forward(self, y_pred: torch.Tensor, y_true: torch.Tensor, weights: Optional[torch.Tensor] = None) -> torch.Tensor:
+        if weights == None:
+            return log_cosh_loss(y_pred, y_true)
+        return weighted_log_cosh_loss(y_pred, y_true, weights)
 
         
 def train_step(dataloader, model, loss_fn, optimizer, batch_size, is_graph, size, dev):
@@ -73,7 +80,26 @@ def train_step(dataloader, model, loss_fn, optimizer, batch_size, is_graph, size
 
         # Compute prediction and loss        
         pred = model(X)
-        loss = loss_fn(pred[:,0].to(dev), y.to(dev))
+
+        if isinstance(loss_fn, torch.nn.BCELoss):
+
+            weights = torch.full(y.shape, 10)
+            weights[torch.nonzero(y)] = 1
+
+            loss_fn.weight = weights
+
+        if isinstance(loss_fn, LogCoshLoss) and is_graph:
+            weights = torch.full(y.shape, 10)
+            weights[torch.nonzero(torch.reshape(X.y, (y.shape[0], 6))[:,4])] = 1
+
+            # np.save("dump_reg_weight.npy", weights.numpy())
+            # np.save("dump_graph_y.npy", X.y.numpy())
+            # sys.exit(0)
+            loss = loss_fn(pred[:,0].to(dev), y.to(dev), weights=weights)
+
+        else:
+            loss = loss_fn(pred[:,0].to(dev), y.to(dev))
+
 
         # Backpropagation
         loss.backward()
@@ -107,6 +133,14 @@ def val_step(dataloader, model, loss_fn, is_graph, dev):
         
         for X, y in iterator:
             pred = model(X)
+
+            if isinstance(loss_fn, torch.nn.BCELoss):
+
+                weights = torch.full(y.shape, 10)
+                weights[torch.nonzero(y)] = 1
+
+                loss_fn.weight = weights
+
             test_loss += loss_fn(pred[:,0].to(dev), y.to(dev)).item()
             num_batches += 1
 
@@ -185,6 +219,7 @@ def train_classifier(X_train, y_train, folder_name, is_graph, dev = "cpu"):
     else:
         model = wa_hls4ml_model.create_model_classification(dev)
 
+
     loss_function = torch.nn.BCELoss()
     
     test_size = .125
@@ -200,7 +235,6 @@ def train_classifier(X_train, y_train, folder_name, is_graph, dev = "cpu"):
     epsilon = 0.000001
 
     general_train(X_train, y_train, model, loss_function, is_graph, batch, test_size, epochs, name, folder_name, learning_rate, weight_decay, patience, cooldown, factor, min_lr, epsilon, dev)
-
     
 def train_regressor(X_train, y_train, output_features, folder_name, is_graph, dev = "cpu"):
     ''' Train regression models for all features '''

@@ -311,9 +311,9 @@ class GraphNet(nn.Module):
         self.dev = dev
 
 def create_model_gnn_class(dev = "cpu"):
-    model = GraphNet(num_global_features=5, classification=True, dev = dev).to(dev)
+    model = GraphNet(num_global_features=6, classification=True, dev = dev).to(dev)
     return model
 
 def create_model_gnn_reg(dev = "cpu"):
-    model = GraphNet(num_global_features=5, classification=False, dev = dev).to(dev)
+    model = GraphNet(num_global_features=6, classification=False, dev = dev).to(dev)
     return model

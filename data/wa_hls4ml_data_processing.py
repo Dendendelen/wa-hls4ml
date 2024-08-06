@@ -144,8 +144,8 @@ def create_graph_tensor(input_values, input_raw_values, input_json, dev):
 
     # ------------------ testing ---------------
 
-    input_values_2 = np.asarray(input_values[3:-1]).astype('float32') # for only resource
-    # input_values_2 = np.asarray(input_values[3:]).astype('float32') # for resource and latency
+    # input_values_2 = np.asarray(input_values[3:-1]).astype('float32') # for only resource
+    input_values_2 = np.asarray(input_values[3:]).astype('float32') # for resource and latency
 
     input_json = input_values[:3]
     if input_raw_values[1] == -1:
@@ -176,11 +176,11 @@ def create_graph_tensor(input_values, input_raw_values, input_json, dev):
 def preprocess_data(is_graph = False, input_folder="../results/results_combined.csv", is_already_serialized = False, dev = "cpu"):
     ''' Preprocess the data '''
 
-    input_features = ["d_in", "d_2", "d_out", "prec", "rf", "strategy"]
+    input_features = ["d_in", "d_2", "d_out", "prec", "rf", "strategy", "rf_times_precision"]
     output_features = ["WorstLatency_hls", "IntervalMax_hls", "FF_hls", "LUT_hls", "BRAM_18K_hls", "DSP_hls", "hls_synth_success"]
     binary_feature_names = ['hls_synth_success']
     numeric_feature_names = ["d_in", "d_2", "d_out", "prec", "rf", "WorstLatency_hls", "IntervalMax_hls", "FF_hls", "LUT_hls",
-                             "BRAM_18K_hls", "DSP_hls"]
+                             "BRAM_18K_hls", "DSP_hls", "rf_times_precision"]
     categorical_feature_names = ["strategy"]
     # special_feature_names = ["json"]
     special_feature_names = ["model_name"]
