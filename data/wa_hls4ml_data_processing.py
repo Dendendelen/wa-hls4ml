@@ -7,6 +7,7 @@ import torch_geometric as pyg
 from torch_geometric.data import Data
 
 import sys
+import math
 
 # current I/O:
 #   inputs: d_in, d_2,	d_out, prec, rf, strategy
@@ -142,27 +143,47 @@ def parse_json_string(json):
 def create_graph_tensor(input_values, input_raw_values, input_json, dev):
     ''' Turn the data into the form of a GraphTensor to allow for GNN use ''' 
 
-    # ------------------ testing ---------------
+    # ------------------ temporary while using CSV rather than JSON ---------------
 
     # input_values_2 = np.asarray(input_values[3:-1]).astype('float32') # for only resource
     input_values_2 = np.asarray(input_values[3:]).astype('float32') # for resource and latency
 
     input_json = input_values[:3]
+    raw_input_json = input_raw_values[:3]
+
     if input_raw_values[1] == -1:
         input_json[1] = None
+        raw_input_json[1] = None
  
     # input_values_2 = np.asarray(input_values[3:]).astype('float32')
 
-
-    # --------------------testing -------------- TODO:remove
-
     #TODO: parse json into distinct nodes and edges
     nodes_count, source, target, activation, density, dropout = parse_json_string(input_json)
+    raw_nodes_count, _, _, _, _, _ = parse_json_string(raw_input_json)
 
     # concatenate and transpose the adjacency list
     adjacency_list = torch.einsum('ij -> ji', torch.cat((torch.tensor(source).unsqueeze(1), torch.tensor(target).unsqueeze(1)), dim = 1)).to(dev)
 
-    nodes = torch.tensor(nodes_count).unsqueeze(1).to(dev)
+    bops_features = np.empty(nodes_count.shape)
+
+    for i in range(nodes_count.shape[0]):
+        curr_nodes = raw_nodes_count[i]
+        if i+1 == nodes_count.shape[0]:
+            next_nodes = 1
+        else:
+            next_nodes = raw_nodes_count[i+1]
+        
+        p = input_raw_values[3]
+        
+        bops = curr_nodes * next_nodes * ( p**2 + p + math.log2(curr_nodes) )
+    
+        bops_features[i] = bops
+
+    bops_features = bops_features.astype('float32')
+
+    # node features are number of nodes in layer, and BOPs estimated
+    nodes = torch.cat((torch.tensor(nodes_count).unsqueeze(1).to(dev), torch.tensor(bops_features).unsqueeze(1).to(dev)), dim=1)
+
     edges = torch.tensor(density).unsqueeze(1).to(dev)
     global_features = torch.tensor(input_values_2).to(dev)
 
@@ -176,11 +197,11 @@ def create_graph_tensor(input_values, input_raw_values, input_json, dev):
 def preprocess_data(is_graph = False, input_folder="../results/results_combined.csv", is_already_serialized = False, dev = "cpu"):
     ''' Preprocess the data '''
 
-    input_features = ["d_in", "d_2", "d_out", "prec", "rf", "strategy", "rf_times_precision"]
+    input_features = ["d_in", "d_2", "d_out", "prec", "rf", "strategy", "rf_times_prec"]
     output_features = ["WorstLatency_hls", "IntervalMax_hls", "FF_hls", "LUT_hls", "BRAM_18K_hls", "DSP_hls", "hls_synth_success"]
     binary_feature_names = ['hls_synth_success']
     numeric_feature_names = ["d_in", "d_2", "d_out", "prec", "rf", "WorstLatency_hls", "IntervalMax_hls", "FF_hls", "LUT_hls",
-                             "BRAM_18K_hls", "DSP_hls", "rf_times_precision"]
+                             "BRAM_18K_hls", "DSP_hls", "rf_times_prec"]
     categorical_feature_names = ["strategy"]
     # special_feature_names = ["json"]
     special_feature_names = ["model_name"]
