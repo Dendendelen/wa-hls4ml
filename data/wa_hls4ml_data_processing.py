@@ -142,7 +142,7 @@ def parse_json_string(json, mean_val, stdev_val):
             source[i] = i
             target[i] = i+1
 
-    return nodes_count, source, target, raw_nodes_count
+    return nodes_count.astype('float32'), source.astype('int64'), target.astype('int64'), raw_nodes_count.astype('float32')
 
 
 def create_graph_tensor(input_values, input_raw_values, input_json, mean, stdev, dev):
@@ -180,7 +180,7 @@ def create_graph_tensor(input_values, input_raw_values, input_json, mean, stdev,
     nodes = torch.cat((torch.tensor(nodes_count).unsqueeze(1).to(dev), torch.tensor(bops_features).unsqueeze(1).to(dev)), dim=1)
 
     # edge vector at present is all ones, no training occurs on it besides implicit adjacency list
-    edges = torch.tensor(np.ones((nodes_count.shape[0]-1),)).unsqueeze(1).to(dev)
+    edges = torch.tensor(np.ones((nodes_count.shape[0]-1),).astype('float32')).unsqueeze(1).to(dev)
     global_features = torch.tensor(input_values_2).to(dev)
 
     # add the number of edges itself as a global feature    
@@ -219,7 +219,7 @@ def preprocess_data(model_folder, is_graph = False, input_folder="../results/res
 
         for datapoint in special_data:
             # tensorize this data into the torch graph-based data format
-            graph_tensor = create_graph_tensor(_X[i], X_raw[i], datapoint, mean, stdev, dev)
+            graph_tensor = create_graph_tensor(_X[i], X_raw[i], datapoint[0], mean, stdev, dev)
             graph_tensor_list.append(graph_tensor)
             i += 1
             if i % 5000 == 0:
