@@ -88,14 +88,12 @@ def train_step(dataloader, model, loss_fn, optimizer, batch_size, is_graph, size
 
             loss_fn.weight = weights
 
-        if isinstance(loss_fn, LogCoshLoss) and is_graph:
-            weights = torch.full(y.shape, 10)
+        # disabled for now, enable when needed to reweight
+        if False and isinstance(loss_fn, LogCoshLoss) and is_graph:
+            weights = torch.full(y.shape, 10).to(dev)
             weights[torch.nonzero(torch.reshape(X.y, (y.shape[0], 6))[:,4])] = 1
 
-            # np.save("dump_reg_weight.npy", weights.numpy())
-            # np.save("dump_graph_y.npy", X.y.numpy())
-            # sys.exit(0)
-            loss = loss_fn(pred[:,0].to(dev), y.to(dev), weights=weights)
+            loss = loss_fn(pred[:,0].to(dev), y.to(dev), weights=weights.to(dev))
 
         else:
             loss = loss_fn(pred[:,0].to(dev), y.to(dev))
@@ -271,9 +269,6 @@ def train_regressor(X_train, y_train, output_features, folder_name, is_graph, de
 
         i += 1
 
-        # if feature != "LUT_hls":
-        #     continue
-
         name = 'regression_'+feature
 
         if not is_graph:
@@ -281,10 +276,6 @@ def train_regressor(X_train, y_train, output_features, folder_name, is_graph, de
         else:
             model = wa_hls4ml_model.create_model_gnn_reg(dev)
 
-        if feature == "DSP_hls":
-            loss_function = LogCoshLoss()
-        else:
-            loss_function = LogCoshLoss()
-            # loss_function = torch.nn.MSELoss()
+        loss_function = LogCoshLoss()
 
         general_train(X_train, y_train_feature, model, loss_function, is_graph, batch, test_size, epochs, name, folder_name, learning_rate, weight_decay, patience, cooldown, factor, min_lr, epsilon, dev)

@@ -13,7 +13,7 @@ import math
 #   inputs: d_in, d_2,	d_out, prec, rf, strategy
 #   outputs: TargetClockPeriod_hls,	WorstLatency_hls, IntervalMax_hls, FF_hls, LUT_hls, BRAM_18K_hls, DSP_hls, hls_synth_success
 
-def preprocess_data_from_csv(csv_file, input_features, output_features, _binary_feature_names, _numeric_feature_names, _categorical_feature_names, special_feature_names):
+def preprocess_data_from_csv(model_folder, csv_file, input_features, output_features, _binary_feature_names, _numeric_feature_names, _categorical_feature_names, special_feature_names, presaved_mean = None, presaved_stdev = None):
     ''' Extract data from a CSV, and preprocess that data '''
 
     # Step 1: Read the CSV file
@@ -30,7 +30,7 @@ def preprocess_data_from_csv(csv_file, input_features, output_features, _binary_
         input_data = df[sel_feature_names]
 
         # Steps 3-6: Process binary, numeric, and categorical features
-        preprocessed_inputs = preprocess_features(input_data, binary_feature_names, numeric_feature_names, categorical_feature_names, processing_input)
+        preprocessed_inputs = preprocess_features(input_data, binary_feature_names, numeric_feature_names, categorical_feature_names, presaved_mean, presaved_stdev, model_folder, processing_input)
         processing_input = False
 
         # Step 7: Convert the preprocessed data to numpy arrays
@@ -51,7 +51,7 @@ def preprocess_data_from_csv(csv_file, input_features, output_features, _binary_
     return np.nan_to_num(preprocessed_data[0], nan=-1), np.nan_to_num(preprocessed_data[1], nan=-1), np.nan_to_num(preprocessed_data[2], nan=-1), special_data
 
 
-def preprocess_features(data, binary_feature_names, numeric_feature_names, categorical_feature_names,processing_input=True):
+def preprocess_features(data, binary_feature_names, numeric_feature_names, categorical_feature_names, presaved_mean, presaved_stdev, model_folder, processing_input=True):
     ''' Preprocess features '''
     preprocessed = []
 
@@ -63,7 +63,16 @@ def preprocess_features(data, binary_feature_names, numeric_feature_names, categ
         print(data[numeric_feature_names].head())
         if processing_input:
             tensorized_val = torch.tensor(data[numeric_feature_names].astype('float32').values)
-            mean, stdev = tensorized_val.mean(dim=0).broadcast_to(tensorized_val.shape), tensorized_val.std(dim=0).broadcast_to(tensorized_val.shape)
+            if presaved_mean is not None and presaved_stdev is not None:
+                overall_mean = torch.tensor(presaved_mean)
+                overall_stdev = torch.tensor(presaved_stdev)
+            else:
+                overall_mean, overall_stdev = tensorized_val.mean(dim=0), tensorized_val.std(dim=0)
+                np.save(model_folder+"/mean.npy", overall_mean.numpy())
+                np.save(model_folder+"/stdev.npy", overall_stdev.numpy())
+
+            mean, stdev = overall_mean.broadcast_to(tensorized_val.shape), overall_stdev.broadcast_to(tensorized_val.shape)
+
             numeric_normalized = (tensorized_val-mean)/stdev
         else:
             numeric_normalized = torch.tensor(data[numeric_feature_names].values.astype('float32'))
@@ -82,6 +91,10 @@ def preprocess_features(data, binary_feature_names, numeric_feature_names, categ
     if categorical_feature_names:
         for name in categorical_feature_names:
             vocab = sorted(set(data[name][1:])) #Exclude header
+
+            # skip this if we trivially have but one data point
+            if len(vocab) == 1: 
+                continue
             if type(vocab[0]) is str:
                 # change strings to integers
                 i = 0
@@ -103,63 +116,37 @@ def preprocess_features(data, binary_feature_names, numeric_feature_names, categ
     return preprocessed_data
 
 
-def parse_json_string(json):
+def parse_json_string(json, mean_val, stdev_val):
     ''' Parse the model information out of a JSON string ''' 
-    #TODO: implement
 
-    if np.isnan(json[1]):
-        nodes_count = np.asarray([json[0], json[2]])
+    json_list = json.split('-')
 
-        source = np.zeros((1,)).astype('int64')
-        target = np.ones((1,)).astype('int64')
+    layer_number = len(json_list)
+    
+    raw_nodes_count = np.empty((layer_number,))
+    nodes_count = np.empty((layer_number,))
+    source = np.empty((layer_number-1,))
+    target = np.empty((layer_number-1))
 
-        activation = np.zeros((1,3)).astype('int64')
-        # activation[0, 0] = 1
+    for i in range(layer_number):
 
-        density = np.ones((1,)).astype('float32')
-        dropout = np.zeros((1,)).astype('float32')
-    else:
-        nodes_count = np.asarray([json[0], json[1], json[2]])
+        raw_nodes_count[i] = float(json_list[i])
+        nodes_count[i] = (float(json_list[i])-mean_val)/stdev_val
 
-        source = np.empty((2,))
-        source[0] = 0
-        source[1] = 1
+        if i < layer_number-1:
+            source[i] = i
+            target[i] = i+1
 
-        source = source.astype('int64')
-
-        target = np.empty((2,))
-        target[0] = 1
-        target[1] = 2
-
-        target = target.astype('int64')
-
-        activation = np.zeros((2,3)).astype('int64')
-        density = np.ones((2,)).astype('float32')
-        dropout = np.zeros((2,)).astype('float32')
-
-    return nodes_count, source, target, activation, density, dropout
+    return nodes_count, source, target, raw_nodes_count
 
 
-def create_graph_tensor(input_values, input_raw_values, input_json, dev):
+def create_graph_tensor(input_values, input_raw_values, input_json, mean, stdev, dev):
     ''' Turn the data into the form of a GraphTensor to allow for GNN use ''' 
 
-    # ------------------ temporary while using CSV rather than JSON ---------------
+    input_values_2 = np.asarray(input_values[2:]).astype('float32') # for resource and latency
 
-    # input_values_2 = np.asarray(input_values[3:-1]).astype('float32') # for only resource
-    input_values_2 = np.asarray(input_values[3:]).astype('float32') # for resource and latency
-
-    input_json = input_values[:3]
-    raw_input_json = input_raw_values[:3]
-
-    if input_raw_values[1] == -1:
-        input_json[1] = None
-        raw_input_json[1] = None
- 
-    # input_values_2 = np.asarray(input_values[3:]).astype('float32')
-
-    #TODO: parse json into distinct nodes and edges
-    nodes_count, source, target, activation, density, dropout = parse_json_string(input_json)
-    raw_nodes_count, _, _, _, _, _ = parse_json_string(raw_input_json)
+    # parse model string into distinct nodes and edges
+    nodes_count, source, target, raw_nodes_count = parse_json_string(input_json, (mean[0]+mean[1])/2, (stdev[0]+stdev[1])/2)
 
     # concatenate and transpose the adjacency list
     adjacency_list = torch.einsum('ij -> ji', torch.cat((torch.tensor(source).unsqueeze(1), torch.tensor(target).unsqueeze(1)), dim = 1)).to(dev)
@@ -175,7 +162,10 @@ def create_graph_tensor(input_values, input_raw_values, input_json, dev):
         
         p = input_raw_values[3]
         
-        bops = curr_nodes * next_nodes * ( p**2 + p + math.log2(curr_nodes) )
+        bops = curr_nodes * next_nodes * ( p**2 + 2 * p + math.log2(curr_nodes) )
+
+        # arrange these to the same or similar order of magnitude as other values
+        bops = math.sqrt(bops)/1000
     
         bops_features[i] = bops
 
@@ -184,7 +174,8 @@ def create_graph_tensor(input_values, input_raw_values, input_json, dev):
     # node features are number of nodes in layer, and BOPs estimated
     nodes = torch.cat((torch.tensor(nodes_count).unsqueeze(1).to(dev), torch.tensor(bops_features).unsqueeze(1).to(dev)), dim=1)
 
-    edges = torch.tensor(density).unsqueeze(1).to(dev)
+    # edge vector at present is all ones, no training occurs on it besides implicit adjacency list
+    edges = torch.tensor(np.ones((nodes_count.shape[0]-1),)).unsqueeze(1).to(dev)
     global_features = torch.tensor(input_values_2).to(dev)
 
     # add the number of edges itself as a global feature    
@@ -194,21 +185,29 @@ def create_graph_tensor(input_values, input_raw_values, input_json, dev):
     return graph_datapoint   
 
 
-def preprocess_data(is_graph = False, input_folder="../results/results_combined.csv", is_already_serialized = False, dev = "cpu"):
+def preprocess_data(model_folder, is_graph = False, input_folder="../results/results_combined.csv", needs_json_parsing = False, is_already_serialized = False, mean = None, stdev = None, doing_train_test_split = True, dev = "cpu"):
     ''' Preprocess the data '''
 
-    input_features = ["d_in", "d_2", "d_out", "prec", "rf", "strategy", "rf_times_prec"]
+    input_features = ["d_in", "d_out", "prec", "rf", "strategy", "rf_times_prec"]
     output_features = ["WorstLatency_hls", "IntervalMax_hls", "FF_hls", "LUT_hls", "BRAM_18K_hls", "DSP_hls", "hls_synth_success"]
     binary_feature_names = ['hls_synth_success']
     numeric_feature_names = ["d_in", "d_2", "d_out", "prec", "rf", "WorstLatency_hls", "IntervalMax_hls", "FF_hls", "LUT_hls",
-                             "BRAM_18K_hls", "DSP_hls", "rf_times_prec"]
+                             "BRAM_18K_hls", "DSP_hls", "rf_times_precision"]
     categorical_feature_names = ["strategy"]
-    # special_feature_names = ["json"]
-    special_feature_names = ["model_name"]
+    special_feature_names = ["model_string"]
 
-    _X, y, X_raw, special_data = preprocess_data_from_csv(input_folder, input_features, output_features,
+    if needs_json_parsing:
+        from wa_hls4ml_json_to_csv import parse_file
+        parse_file(input_folder)
+        input_folder = 'auto_parsed_json.csv'
+
+    _X, y, X_raw, special_data = preprocess_data_from_csv(model_folder, input_folder, input_features, output_features,
                              binary_feature_names, numeric_feature_names,
-                             categorical_feature_names, special_feature_names)
+                             categorical_feature_names, special_feature_names, presaved_mean=mean, presaved_stdev=stdev)
+
+    # load in the preprocessed mean and stdev values
+    mean = np.load(model_folder + "/mean.npy")
+    stdev = np.load(model_folder + "/stdev.npy")
 
     if (is_graph and not is_already_serialized):
         i = 0
@@ -216,7 +215,7 @@ def preprocess_data(is_graph = False, input_folder="../results/results_combined.
 
         for datapoint in special_data:
             # tensorize this data into the torch graph-based data format
-            graph_tensor = create_graph_tensor(_X[i], X_raw[i], datapoint, dev)
+            graph_tensor = create_graph_tensor(_X[i], X_raw[i], datapoint, mean, stdev, dev)
             graph_tensor_list.append(graph_tensor)
             i += 1
             if i % 5000 == 0:
@@ -232,6 +231,15 @@ def preprocess_data(is_graph = False, input_folder="../results/results_combined.
     print("X Data: ",input_features)
     print("Y Data: ",output_features)
 
-    X_train, X_test, y_train, y_test, X_raw_train, X_raw_test = sklearn.model_selection.train_test_split(X, y, X_raw,  test_size=0.2, random_state=42, shuffle=True)
+    if doing_train_test_split:
+        X_train, X_test, y_train, y_test, X_raw_train, X_raw_test = sklearn.model_selection.train_test_split(X, y, X_raw,  test_size=0.2, random_state=42, shuffle=True)
+    else:
+        # in this case, the user is responsible for the splitting
+        X_train = X
+        X_test = X
+        y_train = y
+        y_test = y
+        X_raw_train = X_raw
+        X_raw_test = X_raw
 
     return X_train, X_test, y_train, y_test, X_raw_train, X_raw_test

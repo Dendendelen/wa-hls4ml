@@ -9,7 +9,7 @@ from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score, c
 
 from model.wa_hls4ml_model import load_model
 from data.wa_hls4ml_plotly import plot_results
-from data.wa_hls4ml_data_plot import plot_histograms
+from data.wa_hls4ml_data_plot import plot_histograms, plot_box_plots
 
 def calculate_metrics(y_test, y_pred):
     ''' Calculate out MAE, MSE, RMSE, and R^2 '''
@@ -18,7 +18,9 @@ def calculate_metrics(y_test, y_pred):
     mse = mean_squared_error(y_test, y_pred)
     rmse = np.sqrt(mse)
     r2 = r2_score(y_test, y_pred)
+    smape = (100 / len(y_test)) * np.sum(2 * np.abs(y_pred - y_test) / (np.abs(y_test) + np.abs(y_pred)))
 
+    print(f'Symmetric mean absolute percentage error (SMAPE): {smape}')
     print(f'Mean Absolute Error (MAE): {mae}')
     print(f'Mean Squared Error (MSE): {mse}')
     print(f'Root Mean Squared Error (RMSE): {rmse}')
@@ -54,7 +56,6 @@ def display_results_classifier(X_test, X_raw_test, y_test, output_features, fold
     # plot our classification results
     y_test_2d = np.reshape(y_test, (y_test.shape[0], 1))
     plot_results("classifier", False, y_test_2d, y_pred, X_raw_test, output_features, folder_name)
-
 
 def display_results_regressor(X_test, X_raw_test, y_test, output_features, folder_name, is_graph):
     ''' Display the results of the regression models '''
@@ -92,6 +93,8 @@ def display_results_regressor(X_test, X_raw_test, y_test, output_features, folde
 
     # plot our regression results
     plot_results("regression_all", False, y_test, y_pred, X_raw_test, output_features, folder_name)
+
+    plot_box_plots(y_pred=y_pred, y_test=y_test, folder_name=folder_name)
 
 
 def test_regression_classification_union(X_test, X_raw_test, y_test, features_without_classification, feature_classification_task, folder_name, is_graph = False):
