@@ -17,13 +17,21 @@ from model.wa_hls4ml_test import calculate_metrics, display_results_classifier,d
 from data.wa_hls4ml_data_processing import preprocess_data
 
 
-def perform_train_and_test(train, test, regression, classification, skip_intermediates, is_graph, folder_name = "model_1", input_file = "../results/results_combined.csv", dev="cpu"):
+def perform_train_and_test(train, test, regression, classification, skip_intermediates, is_graph, folder_name = "model_1", input_file = "../results/results_combined.csv", needs_json_parsing = False, doing_train_test_split = True, dev="cpu"):
 
     features_without_classification = ["WorstLatency_hls", "IntervalMax_hls", "FF_hls", "LUT_hls", "BRAM_18K_hls", "DSP_hls"]
     feature_classification_task = ["hls_synth_success"]
 
+    if test and not train:
+        # in this case, we have stored files for the mean and stdev of all our numeric features
+        mean = np.load(folder_name + "/mean.npy")
+        stdev = np.load(folder_name + "/stdev.npy")
+    else:
+        mean = None
+        stdev = None
+
     # get raw data out
-    X_train, X_test, y_train, y_test, X_raw_train, X_raw_test = preprocess_data(is_graph, input_file, dev = dev)
+    X_train, X_test, y_train, y_test, X_raw_train, X_raw_test = preprocess_data(folder_name, is_graph, input_file, needs_json_parsing = needs_json_parsing, mean=mean, stdev=stdev, doing_train_test_split = doing_train_test_split, dev = dev)
 
     # get just the classification task as its own variable
     y_train_classifier = y_train[:, -1]
@@ -90,6 +98,10 @@ if __name__ == "__main__":
 
     parser.add_argument('--gpu', action='store_true', help='Use CUDA GPU processing for training')
     
+    parser.add_argument('--no-tts', action='store_true', help='Disable the automatic train-test split. Use only if using separate training and testing sets.', required=True)
+
+    parser.add_argument('--json', action='store_true', help='Parse JSON file as the input. If not given, assume that the input is a pre-parsed CSV')
+
     parser.add_argument('--train', action='store_true', help='Train a new surrogate model from the data')
     parser.add_argument('--test', action='store_true', help='Test existing models')
 
@@ -106,21 +118,6 @@ if __name__ == "__main__":
     args = parser.parse_args()
     args_dict = vars(args)
 
-    # # allow for GPU use if availible
-    # if os.system('nvidia-smi') == 0:
-    #     print("Num GPUs Available: ", len(tf.config.list_physical_devices('GPU')))
-    #     device = "/GPU:0"
-    #     gpus = tf.config.experimental.list_physical_devices('GPU')
-    #     if gpus:
-    #         try:
-    #             for gpu in gpus:
-    #                 tf.config.experimental.set_memory_growth(gpu, True)
-    #         except RuntimeError as e:
-    #             print(e)
-    # else:
-    #     device = "/CPU:0"
-    # torch.cuda.device("cuda")
-
     train = args_dict['train']
     test = args_dict['test']
 
@@ -128,6 +125,11 @@ if __name__ == "__main__":
     if not train and not test:
         train = True
         test = True
+
+    no_tts = args_dict['no-tts']
+
+    if train and test and no_tts:
+        raise ValueError('Train and test cannot both be selected if the train-test split is disabled - one or the other flag must be set alone.')
 
     classification = args_dict['classification']
     regression= args_dict['regression']
@@ -150,7 +152,7 @@ if __name__ == "__main__":
     folder = 'models/'+folder
 
     input_file = args_dict['input']
-
+    needs_json_parsing = args_dict['json']
     is_gpu = args_dict['gpu']
 
     # allow using CUDA
@@ -161,7 +163,7 @@ if __name__ == "__main__":
 
     # perform the testing and training depending on arguments
     print("Beginning...")
-    perform_train_and_test(train, test, regression, classification, skip_display_intermediate, is_graph, folder, input_file, dev)
+    perform_train_and_test(train, test, regression, classification, skip_display_intermediate, is_graph, folder, input_file, needs_json_parsing, not no_tts, dev)
     print("Done")
     
 

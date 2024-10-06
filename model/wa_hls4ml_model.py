@@ -118,7 +118,7 @@ class GraphNet(nn.Module):
 
         # preprocessing for the node features
         preprocessing_node = collections.OrderedDict()
-        preprocessing_node['preproc_nodes_fc1'] = nn.Linear(in_features=1+num_global_features, out_features=256)
+        preprocessing_node['preproc_nodes_fc1'] = nn.Linear(in_features=2+num_global_features, out_features=256)
         preprocessing_node['preproc_nodes_relu1'] = nn.ELU()
         preprocessing_node['preproc_nodes_dropout'] = nn.Dropout(0.2)
         # preprocessing_node['preproc_nodes_batchnorm'] = nn.BatchNorm1d(256)
@@ -311,9 +311,9 @@ class GraphNet(nn.Module):
         self.dev = dev
 
 def create_model_gnn_class(dev = "cpu"):
-    model = GraphNet(num_global_features=6, classification=True, dev = dev).to(dev)
+    model = GraphNet(num_global_features=4, classification=True, dev = dev).to(dev)
     return model
 
 def create_model_gnn_reg(dev = "cpu"):
-    model = GraphNet(num_global_features=6, classification=False, dev = dev).to(dev)
+    model = GraphNet(num_global_features=4, classification=False, dev = dev).to(dev)
     return model

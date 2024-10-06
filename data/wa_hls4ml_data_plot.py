@@ -1,4 +1,5 @@
 import matplotlib.pyplot as plt
+from matplotlib.lines import Line2D
 import numpy as np
 import os
 
@@ -107,3 +108,81 @@ def plot_histograms(y_predicted, y_actual, output_features, folder_name):
         print("Finished plots for "+feature)
 
         i += 1
+
+
+def plot_box_plots(y_pred, y_test, folder_name):
+    # Box plot
+    # prediction_labels =  ['Cycles', 'FF', 'LUT', 'BRAM', 'DSP']
+    prediction_labels =  ['BRAM', 'DSP', 'FF', 'LUT', 'Cycles']
+    
+
+    prediction_errors = []
+    for i in range(0, len(prediction_labels)):
+        # Percent error
+        # SMALLN = 1e-15
+        # y_test[:, i] = np.where(y_test[:, i] == 0, SMALLN, y_test[:, i])
+        # prediction_errors.append(np.abs((y_test[:,i] - y_pred[:,i])/y_test[:,i])*100)
+
+        # Relative Percent error
+        prediction_errors.append((y_test[:,i] - y_pred[:,i])/(y_test[:,i]+1)*100)
+        
+        # Absolute error
+        # prediction_errors.append(np.abs(y_test[:,i] - y_pred[:,i]))
+
+        # # Relative Error
+        # prediction_errors.append(y_test[:,i] - y_pred[:,i])
+    
+    prediction_errors=[prediction_errors[3],prediction_errors[4],prediction_errors[1],
+                       prediction_errors[2],prediction_errors[0]]
+    
+    plt.rcParams.update({"font.size": 16})
+    fig, axis = plt.subplots(1, len(prediction_labels), figsize=(12, 8))
+    axis = np.reshape(axis, -1)
+    fig.subplots_adjust(hspace=0.1, wspace=0.6)
+    iqr_weight = 1.5
+    colors = ["pink", "yellow", "lightgreen", "lightblue", "#FFA500"] #plum
+    for i, errors in enumerate(prediction_errors):
+        label = prediction_labels[i]
+        ax = axis[i]
+        bplot = ax.boxplot(
+            errors,
+            whis=iqr_weight,
+            tick_labels=[label.upper()],
+            showfliers=True,
+            showmeans=True,
+            meanline=True,
+            vert=True,
+            patch_artist=True
+        )
+        for j, patch in enumerate(bplot["boxes"]):
+            patch.set_facecolor(colors[(i + j) % len(colors)])
+        ax.yaxis.grid(True)
+        ax.spines.top.set_visible(False)
+        ax.xaxis.tick_bottom()
+    median_line = Line2D([0], [0], color="orange", linestyle="--", linewidth=1.5, label="Median")
+    mean_line = Line2D([0], [0], color="green", linestyle="--", linewidth=1.5, label="Mean")
+    handles = [median_line, mean_line]
+    labels = ["Median", "Mean"]
+    legends = fig.legend(
+        handles,
+        labels,
+        bbox_to_anchor=[0.9, 1],
+        loc="upper right",
+        ncol=len(labels) // 2,
+    )
+    # ytext = fig.text(0.02, 0.5, "Absolute Error", va="center", rotation="vertical", size=18)
+    ytext = fig.text(0.02, 0.5, "Relative Percent Error", va="center", rotation="vertical", size=18)
+    # ytext = fig.text(0.02, 0.5, "Relative Error", va="center", rotation="vertical", size=18)
+    suptitle = fig.suptitle("Prediction Errors - Boxplots", fontsize=20, y=0.95)
+    fig.savefig(
+        "./box_plot_exemplar.pdf",
+        dpi=300,
+        bbox_extra_artists=(legends, ytext, suptitle),
+        bbox_inches="tight",
+    )
+
+    directory = folder_name+'/plots/'
+
+    plt.savefig(directory+'_box.pdf')
+
+    plt.close()
