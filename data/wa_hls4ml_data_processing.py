@@ -190,7 +190,7 @@ def create_graph_tensor(input_values, input_raw_values, input_json, mean, stdev,
 def preprocess_data(model_folder, is_graph = False, input_folder="../results/results_combined.csv", needs_json_parsing = False, is_already_serialized = False, mean = None, stdev = None, doing_train_test_split = True, dev = "cpu"):
     ''' Preprocess the data '''
 
-    input_features = ["d_in", "d_out", "prec", "rf", "strategy", "rf_times_prec"]
+    input_features = ["d_in", "d_out", "prec", "rf", "strategy", "rf_times_precision"]
     output_features = ["WorstLatency_hls", "IntervalMax_hls", "FF_hls", "LUT_hls", "BRAM_18K_hls", "DSP_hls", "hls_synth_success"]
     binary_feature_names = ['hls_synth_success']
     numeric_feature_names = ["d_in", "d_2", "d_out", "prec", "rf", "WorstLatency_hls", "IntervalMax_hls", "FF_hls", "LUT_hls",

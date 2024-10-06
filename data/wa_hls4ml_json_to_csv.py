@@ -86,7 +86,6 @@ def parse_file(file):
                 break
             prec = re.sub(",[0-9]+\>", "", prec)
             prec = re.sub("fixed\<", "", prec)
-            print("Precision:", prec)
 
             model_file = meta_data['artifacts_file']
 
