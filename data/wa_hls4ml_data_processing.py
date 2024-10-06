@@ -5,6 +5,8 @@ import sklearn.model_selection
 
 import torch_geometric as pyg
 from torch_geometric.data import Data
+        
+from data.wa_hls4ml_json_to_csv import parse_file
 
 import sys
 import math
@@ -197,7 +199,6 @@ def preprocess_data(model_folder, is_graph = False, input_folder="../results/res
     special_feature_names = ["model_string"]
 
     if needs_json_parsing:
-        from wa_hls4ml_json_to_csv import parse_file
         parse_file(input_folder)
         input_folder = 'auto_parsed_json.csv'
 
