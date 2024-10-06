@@ -8,6 +8,7 @@ from torch_geometric.data import Data
         
 from data.wa_hls4ml_json_to_csv import parse_file
 
+import os
 import sys
 import math
 
@@ -70,6 +71,8 @@ def preprocess_features(data, binary_feature_names, numeric_feature_names, categ
                 overall_stdev = torch.tensor(presaved_stdev)
             else:
                 overall_mean, overall_stdev = tensorized_val.mean(dim=0), tensorized_val.std(dim=0)
+                if not os.path.exists(model_folder):
+                    os.makedirs(model_folder)
                 np.save(model_folder+"/mean.npy", overall_mean.numpy())
                 np.save(model_folder+"/stdev.npy", overall_stdev.numpy())
 

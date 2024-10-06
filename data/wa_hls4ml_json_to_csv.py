@@ -37,7 +37,7 @@ def parse_file(file):
 
     data = data_reader(file)
 
-    print("Read in " + str(len(data)) + "models from JSON, parsing...")
+    print("Read in " + str(len(data)) + " models from JSON, parsing...")
 
     csv_header = [
         'model_name', 'd_in', 'd_out', 'prec', 'model_file', 'model_string', 'rf', 'strategy', 
